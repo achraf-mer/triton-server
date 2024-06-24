@@ -635,6 +635,10 @@ def pytorch_cmake_args(images):
     cargs.append(
         cmake_backend_enable("pytorch", "TRITON_ENABLE_NVTX", FLAGS.enable_nvtx)
     )
+
+    if target_platform() == "igpu":
+          cargs.append(cmake_backend_enable("pytorch","TRITON_IGPU_BUILD",True))
+
     return cargs
 
 
