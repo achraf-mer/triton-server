@@ -131,8 +131,9 @@ else
     RET=1
 fi
 
-g++ http_test.cc $client_lib/libhttpclient_static.a $client_lib/libcurl.a -o http_test_static \
-  -I$client_inc -lz -lssl -lcrypto -lpthread
+g++ http_test.cc $client_lib/libhttpclient_static.a $client_lib/libcurl.a \
+  $client_lib/libtritoncommonmodelconfig.a $client_lib/libprotobuf.a \
+  -o http_test_static -I$client_inc -lz -lssl -lcrypto -lpthread
 
 if [ $? -eq 0 ]; then
     if [[ ! -x "./http_test_static" ]]; then

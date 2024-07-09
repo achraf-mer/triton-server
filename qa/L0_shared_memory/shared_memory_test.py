@@ -272,7 +272,7 @@ class SharedMemoryTest(tu.TestResultCollector):
         )
         if len(error_msg) > 0:
             self.assertIn(
-                "input byte size mismatch for input 'INPUT1' for model 'simple'. Expected 64, got 128",
+                "input 'INPUT1' got unexpected byte size 128, expected 64",
                 error_msg[-1],
             )
         shm_handles.append(shm_ip2_handle)
