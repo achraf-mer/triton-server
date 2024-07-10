@@ -169,7 +169,7 @@ class InputShapeTest(unittest.TestCase):
                 triton_client.infer(model_name=model_name, inputs=inputs)
             err_str = str(e.exception)
             self.assertIn(
-                f"'INPUT0' got unexpected elements count 16, expected 8",
+                f"input 'INPUT0' got unexpected elements count 16, expected 8",
                 err_str,
             )
 
@@ -202,7 +202,7 @@ class InputShapeTest(unittest.TestCase):
                     triton_client.infer(model_name=model_name, inputs=inputs)
                 err_str = str(e.exception)
                 self.assertIn(
-                    f"'INPUT0' got unexpected elements count 16, expected 8",
+                    f"input 'INPUT0' got unexpected elements count 16, expected 8",
                     err_str,
                 )
 
@@ -286,7 +286,7 @@ class InputShapeTest(unittest.TestCase):
                 triton_client.infer(model_name=model_name, inputs=inputs)
             err_str = str(e.exception)
             self.assertIn(
-                f"'INPUT0' got unexpected byte size {input_byte_size+4}, expected {input_byte_size}",
+                f"input 'INPUT0' got unexpected byte size {input_byte_size+4}, expected {input_byte_size}",
                 err_str,
             )
 
@@ -300,7 +300,7 @@ class InputShapeTest(unittest.TestCase):
                 triton_client.infer(model_name=model_name, inputs=inputs)
             err_str = str(e.exception)
             self.assertIn(
-                f"'INPUT1' got unexpected byte size {input_byte_size-4}, expected {input_byte_size}",
+                f"input 'INPUT1' got unexpected byte size {input_byte_size-4}, expected {input_byte_size}",
                 err_str,
             )
 
