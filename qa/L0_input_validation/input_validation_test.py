@@ -36,11 +36,7 @@ import numpy as np
 import tritonclient.grpc as tritongrpcclient
 import tritonclient.http as tritonhttpclient
 import tritonclient.utils as utils
-from tritonclient.utils import (
-    InferenceServerException,
-    np_to_triton_dtype,
-    shared_memory,
-)
+from tritonclient.utils import InferenceServerException, shared_memory
 
 
 class InputValTest(unittest.TestCase):
