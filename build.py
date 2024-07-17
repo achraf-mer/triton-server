@@ -874,6 +874,100 @@ RUN curl -o /tmp/cuda-keyring.deb \\
                 dcgm_version, dcgm_version
             )
 
+def create_dockerfile_buildbase_rhel(ddir, dockerfile_name, argmap):
+    df = """
+ARG TRITON_VERSION={}
+ARG TRITON_CONTAINER_VERSION={}
+ARG BASE_IMAGE={}
+""".format(
+        argmap["TRITON_VERSION"],
+        argmap["TRITON_CONTAINER_VERSION"],
+        argmap["BASE_IMAGE"],
+    )
+
+    df += """
+FROM ${BASE_IMAGE}
+
+ARG TRITON_VERSION
+ARG TRITON_CONTAINER_VERSION
+"""
+    df += """
+# Install docker docker buildx
+RUN yum install -y ca-certificates curl gnupg yum-utils \\
+      && yum-config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo \\
+      && yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+#   && yum install -y docker.io docker-buildx-plugin
+
+# libcurl4-openSSL-dev is needed for GCS
+# python3-dev is needed by Torchvision
+# python3-pip and libarchive-dev is needed by python backend
+# libxml2-dev is needed for Azure Storage
+# scons is needed for armnn_tflite backend build dep
+RUN yum install -y \\
+            ca-certificates \\
+            autoconf \\
+            automake \\
+            git \\
+            gperf \\
+            re2-devel \\
+            openssl-devel \\
+            libtool \\
+            libcurl-devel \\
+            libb64-devel \\
+            gperftools-devel \\
+            patchelf \\
+            python3.11-devel \\
+            python3-pip \\
+            python3-setuptools \\
+            rapidjson-devel \\
+            python3-scons \\
+            pkg-config \\
+            unzip \\
+            wget \\
+            zlib-devel \\
+            libarchive-devel \\
+            libxml2-devel \\
+            numactl-devel \\
+            wget 
+
+RUN pip3 install --upgrade pip \\
+      && pip3 install --upgrade \\
+          wheel \\
+          setuptools \\
+          docker \\
+          virtualenv
+
+# Install boost version >= 1.78 for boost::span
+# Current libboost-dev apt packages are < 1.78, so install from tar.gz
+RUN wget -O /tmp/boost.tar.gz \\
+          https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz \\
+      && (cd /tmp && tar xzf boost.tar.gz) \\
+      && mv /tmp/boost_1_80_0/boost /usr/include/boost
+
+# Server build requires recent version of CMake (FetchContent required)
+# Might not need this if the installed version of cmake is high enough for our build.
+# RUN apt update -q=2 \\
+#       && apt install -y gpg wget \\
+#       && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - |  tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null \\
+#       && . /etc/os-release \\
+#       && echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $UBUNTU_CODENAME main" | tee /etc/apt/sources.list.d/kitware.list >/dev/null \\
+#       && apt-get update -q=2 \\
+#       && apt-get install -y --no-install-recommends cmake=3.27.7* cmake-data=3.27.7*
+"""
+    df += """
+ENV TRITON_SERVER_VERSION ${TRITON_VERSION}
+ENV NVIDIA_TRITON_SERVER_VERSION ${TRITON_CONTAINER_VERSION}
+"""
+
+    df += """
+WORKDIR /workspace
+RUN rm -fr *
+COPY . .
+ENTRYPOINT []
+"""
+
+    with open(os.path.join(ddir, dockerfile_name), "w") as dfile:
+        dfile.write(df)
 
 def create_dockerfile_buildbase(ddir, dockerfile_name, argmap):
     df = """
@@ -1031,6 +1125,10 @@ ENV NVIDIA_TRITON_SERVER_VERSION ${TRITON_CONTAINER_VERSION}
     with open(os.path.join(ddir, dockerfile_name), "w") as dfile:
         dfile.write(df)
 
+def create_dockerfile_rhel(    
+    ddir, dockerfile_name, argmap, backends, repoagents, caches, endpoints
+):
+    pass 
 
 def create_dockerfile_linux(
     ddir, dockerfile_name, argmap, backends, repoagents, caches, endpoints
@@ -1444,9 +1542,14 @@ def create_build_dockerfiles(
             )
         dockerfileargmap["GPU_BASE_IMAGE"] = gpu_base_image
 
-    create_dockerfile_buildbase(
-        FLAGS.build_dir, "Dockerfile.buildbase", dockerfileargmap
-    )
+    if target_platform() == "rhel":
+        create_dockerfile_buildbase_rhel(
+            FLAGS.build_dir, "Dockerfile.buildbase", dockerfileargmap
+        )
+    else:
+        create_dockerfile_buildbase(
+            FLAGS.build_dir, "Dockerfile.buildbase", dockerfileargmap
+        )
 
     if target_platform() == "windows":
         create_dockerfile_windows(
@@ -1456,6 +1559,16 @@ def create_build_dockerfiles(
             backends,
             repoagents,
             caches,
+        )
+    elif target_platform() == "rhel":
+        create_dockerfile_rhel(
+            FLAGS.build_dir,
+            "Dockerfile",
+            dockerfileargmap,
+            backends,
+            repoagents,
+            caches,
+            endpoints,
         )
     else:
         create_dockerfile_linux(
@@ -1469,7 +1582,10 @@ def create_build_dockerfiles(
         )
 
     # Dockerfile used for the creating the CI base image.
-    create_dockerfile_cibase(FLAGS.build_dir, "Dockerfile.cibase", dockerfileargmap)
+    if target_platform() == "rhel":
+        pass
+    else:
+        create_dockerfile_cibase(FLAGS.build_dir, "Dockerfile.cibase", dockerfileargmap)
 
 
 def create_docker_build_script(script_name, container_install_dir, container_ci_dir):
@@ -2136,7 +2252,7 @@ if __name__ == "__main__":
         "--target-platform",
         required=False,
         default=None,
-        help='Target platform for build, can be "linux", "windows" or "igpu". If not specified, build targets the current platform.',
+        help='Target platform for build, can be "linux", "rhel", "windows" or "igpu". If not specified, build targets the current platform.',
     )
     parser.add_argument(
         "--target-machine",
