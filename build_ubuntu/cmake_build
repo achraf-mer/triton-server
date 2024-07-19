@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+# 
+# Build script for Triton Inference Server
+# 
+
+# Exit script immediately if any command fails
+set -e
+set -x
+
+########
+# Triton core library and tritonserver executable
+# 
+mkdir -p /tmp/tritonbuild/tritonserver/build
+cd /tmp/tritonbuild/tritonserver/build
+cmake "-DTRT_VERSION=${TRT_VERSION}" "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}" "-DVCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}" "-DCMAKE_BUILD_TYPE=Release" "-DCMAKE_INSTALL_PREFIX:PATH=/tmp/tritonbuild/tritonserver/install" "-DTRITON_VERSION:STRING=2.47.0" "-DTRITON_REPO_ORGANIZATION:STRING=https://github.com/triton-inference-server" "-DTRITON_COMMON_REPO_TAG:STRING=r24.06" "-DTRITON_CORE_REPO_TAG:STRING=r24.06" "-DTRITON_BACKEND_REPO_TAG:STRING=r24.06" "-DTRITON_THIRD_PARTY_REPO_TAG:STRING=r24.06" "-DTRITON_ENABLE_LOGGING:BOOL=OFF" "-DTRITON_ENABLE_STATS:BOOL=OFF" "-DTRITON_ENABLE_METRICS:BOOL=OFF" "-DTRITON_ENABLE_METRICS_GPU:BOOL=OFF" "-DTRITON_ENABLE_METRICS_CPU:BOOL=OFF" "-DTRITON_ENABLE_TRACING:BOOL=OFF" "-DTRITON_ENABLE_NVTX:BOOL=OFF" "-DTRITON_ENABLE_GPU:BOOL=OFF" "-DTRITON_MIN_COMPUTE_CAPABILITY=6.0" "-DTRITON_ENABLE_MALI_GPU:BOOL=OFF" "-DTRITON_ENABLE_GRPC:BOOL=OFF" "-DTRITON_ENABLE_HTTP:BOOL=OFF" "-DTRITON_ENABLE_SAGEMAKER:BOOL=OFF" "-DTRITON_ENABLE_VERTEX_AI:BOOL=OFF" "-DTRITON_ENABLE_GCS:BOOL=OFF" "-DTRITON_ENABLE_S3:BOOL=OFF" "-DTRITON_ENABLE_AZURE_STORAGE:BOOL=OFF" "-DTRITON_ENABLE_ENSEMBLE:BOOL=ON" "-DTRITON_ENABLE_TENSORRT:BOOL=OFF" "-DTRITON_IGPU_BUILD=0" /workspace
+cmake --build . --config Release -j8 -v -t install
+mkdir -p /tmp/tritonbuild/install/bin
+cp /tmp/tritonbuild/tritonserver/install/bin/tritonserver /tmp/tritonbuild/install/bin
+mkdir -p /tmp/tritonbuild/install/lib
+cp /tmp/tritonbuild/tritonserver/install/lib/libtritonserver.so /tmp/tritonbuild/install/lib
+mkdir -p /tmp/tritonbuild/install/python
+cp /tmp/tritonbuild/tritonserver/install/python/tritonserver*.whl /tmp/tritonbuild/install/python
+mkdir -p /tmp/tritonbuild/install/include/triton
+cp -r /tmp/tritonbuild/tritonserver/install/include/triton/core /tmp/tritonbuild/install/include/triton/core
+cp /workspace/LICENSE /tmp/tritonbuild/install
+cp /workspace/TRITON_VERSION /tmp/tritonbuild/install
+mkdir -p /tmp/tritonbuild/install/third-party-src
+cd /tmp/tritonbuild/tritonserver/build
+tar zcf /tmp/tritonbuild/install/third-party-src/src.tar.gz third-party-src
+cp /workspace/docker/README.third-party-src /tmp/tritonbuild/install/third-party-src/README
+# 
+# end Triton core library and tritonserver executable
+########
+
+########
+# Collect Triton CI artifacts
+# 
+mkdir -p /tmp/tritonbuild/ci
+cp -r /workspace/qa /tmp/tritonbuild/ci
+cp -r /workspace/deploy /tmp/tritonbuild/ci
+mkdir -p /tmp/tritonbuild/ci/docs
+cp -r /workspace/docs/examples /tmp/tritonbuild/ci/docs
+mkdir -p /tmp/tritonbuild/ci/src/test
+cp -r /workspace/src/test/models /tmp/tritonbuild/ci/src/test
+cp -r /tmp/tritonbuild/tritonserver/install/bin /tmp/tritonbuild/ci
+mkdir -p /tmp/tritonbuild/ci/lib
+cp /tmp/tritonbuild/tritonserver/install/lib/libtritonrepoagent_relocation.so /tmp/tritonbuild/ci/lib
+cp -r /tmp/tritonbuild/tritonserver/install/python /tmp/tritonbuild/ci
+mkdir -p /tmp/tritonbuild/ci/backends
+if [[ -e /tmp/tritonbuild/identity/install/backends/identity ]]; then
+cp -r /tmp/tritonbuild/identity/install/backends/identity /tmp/tritonbuild/ci/backends
+fi
+if [[ -e /tmp/tritonbuild/repeat/install/backends/repeat ]]; then
+cp -r /tmp/tritonbuild/repeat/install/backends/repeat /tmp/tritonbuild/ci/backends
+fi
+if [[ -e /tmp/tritonbuild/square/install/backends/square ]]; then
+cp -r /tmp/tritonbuild/square/install/backends/square /tmp/tritonbuild/ci/backends
+fi
+mkdir -p /tmp/tritonbuild/ci/tritonbuild/tritonserver/backends
+if [[ -e /tmp/tritonbuild/tritonserver/install/backends/query ]]; then
+cp -r /tmp/tritonbuild/tritonserver/install/backends/query /tmp/tritonbuild/ci/tritonbuild/tritonserver/backends
+fi
+if [[ -e /tmp/tritonbuild/tritonserver/install/backends/implicit_state ]]; then
+cp -r /tmp/tritonbuild/tritonserver/install/backends/implicit_state /tmp/tritonbuild/ci/tritonbuild/tritonserver/backends
+fi
+if [[ -e /tmp/tritonbuild/tritonserver/install/backends/sequence ]]; then
+cp -r /tmp/tritonbuild/tritonserver/install/backends/sequence /tmp/tritonbuild/ci/tritonbuild/tritonserver/backends
+fi
+if [[ -e /tmp/tritonbuild/tritonserver/install/backends/dyna_sequence ]]; then
+cp -r /tmp/tritonbuild/tritonserver/install/backends/dyna_sequence /tmp/tritonbuild/ci/tritonbuild/tritonserver/backends
+fi
+if [[ -e /tmp/tritonbuild/tritonserver/install/backends/distributed_addsub ]]; then
+cp -r /tmp/tritonbuild/tritonserver/install/backends/distributed_addsub /tmp/tritonbuild/ci/tritonbuild/tritonserver/backends
+fi
+if [[ -e /tmp/tritonbuild/tritonserver/install/backends/iterative_sequence ]]; then
+cp -r /tmp/tritonbuild/tritonserver/install/backends/iterative_sequence /tmp/tritonbuild/ci/tritonbuild/tritonserver/backends
+fi
+mkdir -p /tmp/tritonbuild/ci/tritonbuild
+# 
+# end Triton CI artifacts
+########
+
+chmod -R a+rw /tmp/tritonbuild/install
+chmod -R a+rw /tmp/tritonbuild/ci

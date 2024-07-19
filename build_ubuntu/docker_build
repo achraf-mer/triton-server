@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+# 
+# Docker-based build script for Triton Inference Server
+# 
+
+# Exit script immediately if any command fails
+set -e
+set -x
+
+########
+# Create Triton base build image
+# This image contains all dependencies necessary to build Triton
+# 
+cd /home/kmcgill/manylinux/server
+docker build -t tritonserver_buildbase -f /home/kmcgill/manylinux/server/build/Dockerfile.buildbase --pull --cache-from=tritonserver_buildbase --cache-from=tritonserver_buildbase_cache0 --cache-from=tritonserver_buildbase_cache1 . 
+
+########
+# Run build in tritonserver_buildbase container
+# Mount a directory into the container where the install
+# artifacts will be placed.
+# 
+if [ "$(docker ps -a | grep tritonserver_builder)" ]; then  docker rm -f tritonserver_builder; fi
+docker run -w /workspace/build --name tritonserver_builder -it -v /var/run/docker.sock:/var/run/docker.sock tritonserver_buildbase ./cmake_build 
+docker cp tritonserver_builder:/tmp/tritonbuild/install /home/kmcgill/manylinux/server/build 
+docker cp tritonserver_builder:/tmp/tritonbuild/ci /home/kmcgill/manylinux/server/build 
+
+########
+# Create final tritonserver image
+# 
+cd /home/kmcgill/manylinux/server
+docker build -t tritonserver -f /home/kmcgill/manylinux/server/build/Dockerfile . 
+
+########
+# Create CI base image
+# 
+cd /home/kmcgill/manylinux/server
+docker build -t tritonserver_cibase -f /home/kmcgill/manylinux/server/build/Dockerfile.cibase . 
