@@ -849,6 +849,15 @@ def install_dcgm_libraries(dcgm_version, target_machine):
     else:
                 # RHEL has the same install instructions for both aarch64 and x86
         if target_platform() == "rhel":
+            if target_machine == "aarch64":
+                return """
+ENV DCGM_VERSION {}
+# Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
+RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/sbsa/cuda-rhel8.repo \\
+    && dnf clean expire-cache \\
+    && dnf install -y datacenter-gpu-manager-{}
+""".format(dcgm_version, dcgm_version)
+            else:
                 return """
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
