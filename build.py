@@ -847,8 +847,18 @@ def install_dcgm_libraries(dcgm_version, target_machine):
         )
         return ""
     else:
-        if target_machine == "aarch64":
-            return """
+                # RHEL has the same install instructions for both aarch64 and x86
+        if target_platform() == "rhel":
+                return """
+ENV DCGM_VERSION {}
+# Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
+RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo \\
+    && dnf clean expire-cache \\
+    && dnf install -y datacenter-gpu-manager-{}
+""".format(dcgm_version, dcgm_version)
+        else:
+            if target_machine == "aarch64":
+                return """
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
 RUN curl -o /tmp/cuda-keyring.deb \\
@@ -860,8 +870,8 @@ RUN curl -o /tmp/cuda-keyring.deb \\
 """.format(
                 dcgm_version, dcgm_version
             )
-        else:
-            return """
+            else:
+                return """
 ENV DCGM_VERSION {}
 # Install DCGM. Steps from https://developer.nvidia.com/dcgm#Downloads
 RUN curl -o /tmp/cuda-keyring.deb \\
@@ -954,6 +964,8 @@ RUN wget -O /tmp/boost.tar.gz \\
 #       && apt-get update -q=2 \\
 #       && apt-get install -y --no-install-recommends cmake=3.27.7* cmake-data=3.27.7*
 """
+    if FLAGS.enable_gpu:
+        df += install_dcgm_libraries(argmap["DCGM_VERSION"], target_machine())
     df += """
 ENV TRITON_SERVER_VERSION ${TRITON_VERSION}
 ENV NVIDIA_TRITON_SERVER_VERSION ${TRITON_CONTAINER_VERSION}
@@ -1773,6 +1785,17 @@ def core_build(
         cmake_script.cp(
             os.path.join(repo_install_dir, "bin", "tritonserver.dll"),
             os.path.join(install_dir, "bin"),
+        )
+    elif target_platform() == "rhel":
+        cmake_script.mkdir(os.path.join(install_dir, "bin"))
+        cmake_script.cp(
+            os.path.join(repo_install_dir, "bin", "tritonserver"),
+            os.path.join(install_dir, "bin"),
+        )
+        cmake_script.mkdir(os.path.join(install_dir, "lib64"))
+        cmake_script.cp(
+            os.path.join(repo_install_dir, "lib64", "libtritonserver.so"),
+            os.path.join(install_dir, "lib64"),
         )
     else:
         cmake_script.mkdir(os.path.join(install_dir, "bin"))
