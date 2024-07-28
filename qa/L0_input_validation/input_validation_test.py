@@ -36,7 +36,8 @@ import numpy as np
 import tritonclient.grpc as tritongrpcclient
 import tritonclient.http as tritonhttpclient
 import tritonclient.utils as utils
-from tritonclient.utils import InferenceServerException, shared_memory
+import tritonclient.utils.shared_memory as shm
+from tritonclient.utils import InferenceServerException
 
 
 class InputValTest(unittest.TestCase):
@@ -250,13 +251,13 @@ class InputShapeTest(unittest.TestCase):
             input_byte_size = input0_data.size * input0_data.itemsize
 
             # Create shared memory region for input and store shared memory handle
-            shm_ip_handle = shared_memory.create_shared_memory_region(
+            shm_ip_handle = shm.create_shared_memory_region(
                 "input_data", "/input_simple", input_byte_size * 2
             )
 
             # Put input data values into shared memory
-            shared_memory.set_shared_memory_region(shm_ip_handle, [input0_data])
-            shared_memory.set_shared_memory_region(
+            shm.set_shared_memory_region(shm_ip_handle, [input0_data])
+            shm.set_shared_memory_region(
                 shm_ip_handle, [input1_data], offset=input_byte_size
             )
 
@@ -302,9 +303,9 @@ class InputShapeTest(unittest.TestCase):
 
             print(triton_client.get_system_shared_memory_status())
             triton_client.unregister_system_shared_memory()
-            assert len(shared_memory.mapped_shared_memory_regions()) == 1
-            shared_memory.destroy_shared_memory_region(shm_ip_handle)
-            assert len(shared_memory.mapped_shared_memory_regions()) == 0
+            assert len(shm.mapped_shared_memory_regions()) == 1
+            shm.destroy_shared_memory_region(shm_ip_handle)
+            assert len(shm.mapped_shared_memory_regions()) == 0
 
     def test_client_input_string_shm_size_validation(self):
         # We use a simple model that takes 2 input tensors of 16 strings
@@ -344,20 +345,16 @@ class InputShapeTest(unittest.TestCase):
             input1_byte_size = utils.serialized_byte_size(input1_data_serialized)
 
             # Create Input0 and Input1 in Shared Memory and store shared memory handles
-            shm_ip0_handle = shared_memory.create_shared_memory_region(
+            shm_ip0_handle = shm.create_shared_memory_region(
                 "input0_data", "/input0_simple", input0_byte_size
             )
-            shm_ip1_handle = shared_memory.create_shared_memory_region(
+            shm_ip1_handle = shm.create_shared_memory_region(
                 "input1_data", "/input1_simple", input1_byte_size
             )
 
             # Put input data values into shared memory
-            shared_memory.set_shared_memory_region(
-                shm_ip0_handle, [input0_data_serialized]
-            )
-            shared_memory.set_shared_memory_region(
-                shm_ip1_handle, [input1_data_serialized]
-            )
+            shm.set_shared_memory_region(shm_ip0_handle, [input0_data_serialized])
+            shm.set_shared_memory_region(shm_ip1_handle, [input1_data_serialized])
 
             # Register Input0 and Input1 shared memory with Triton Server
             triton_client.register_system_shared_memory(
@@ -390,10 +387,81 @@ class InputShapeTest(unittest.TestCase):
 
             print(triton_client.get_system_shared_memory_status())
             triton_client.unregister_system_shared_memory()
-            assert len(shared_memory.mapped_shared_memory_regions()) == 2
-            shared_memory.destroy_shared_memory_region(shm_ip0_handle)
-            shared_memory.destroy_shared_memory_region(shm_ip1_handle)
-            assert len(shared_memory.mapped_shared_memory_regions()) == 0
+            assert len(shm.mapped_shared_memory_regions()) == 2
+            shm.destroy_shared_memory_region(shm_ip0_handle)
+            shm.destroy_shared_memory_region(shm_ip1_handle)
+            assert len(shm.mapped_shared_memory_regions()) == 0
+
+    def test_wrong_input_shape_tensor_size(self):
+        def inference_helper(model_name, batch_size=1):
+            triton_client = tritongrpcclient.InferenceServerClient("localhost:8001")
+            if batch_size > 1:
+                dummy_input_data = np.random.rand(batch_size, 32, 32).astype(np.float32)
+            else:
+                dummy_input_data = np.random.rand(32, 32).astype(np.float32)
+            shape_tensor_data = np.asarray([4, 4], dtype=np.int32)
+
+            # Pass incorrect input byte size date for shape tensor
+            # Use shared memory to bypass the shape check in client library
+            input_byte_size = (shape_tensor_data.size - 1) * np.dtype(np.int32).itemsize
+
+            input_shm_handle = shm.create_shared_memory_region(
+                "INPUT0_SHM",
+                "/INPUT0_SHM",
+                input_byte_size,
+            )
+            shm.set_shared_memory_region(
+                input_shm_handle,
+                [
+                    shape_tensor_data,
+                ],
+            )
+            triton_client.register_system_shared_memory(
+                "INPUT0_SHM",
+                "/INPUT0_SHM",
+                input_byte_size,
+            )
+
+            inputs = [
+                tritongrpcclient.InferInput(
+                    "DUMMY_INPUT0",
+                    dummy_input_data.shape,
+                    utils.np_to_triton_dtype(np.float32),
+                ),
+                tritongrpcclient.InferInput(
+                    "INPUT0",
+                    shape_tensor_data.shape,
+                    utils.np_to_triton_dtype(np.int32),
+                ),
+            ]
+            inputs[0].set_data_from_numpy(dummy_input_data)
+            inputs[1].set_shared_memory("INPUT0_SHM", input_byte_size)
+
+            outputs = [
+                tritongrpcclient.InferRequestedOutput("DUMMY_OUTPUT0"),
+                tritongrpcclient.InferRequestedOutput("OUTPUT0"),
+            ]
+
+            try:
+                # Perform inference
+                with self.assertRaises(InferenceServerException) as e:
+                    triton_client.infer(
+                        model_name=model_name, inputs=inputs, outputs=outputs
+                    )
+                err_str = str(e.exception)
+                correct_input_byte_size = (
+                    shape_tensor_data.size * np.dtype(np.int32).itemsize
+                )
+                self.assertIn(
+                    f"input byte size mismatch for input 'INPUT0' for model '{model_name}'. Expected {correct_input_byte_size}, got {input_byte_size}",
+                    err_str,
+                )
+            finally:
+                shm.destroy_shared_memory_region(input_shm_handle)
+                triton_client.unregister_system_shared_memory("INPUT0_SHM")
+
+        inference_helper(model_name="plan_nobatch_zero_1_float32_int32")
+        inference_helper(model_name="plan_zero_1_float32_int32", batch_size=8)
 
 
 if __name__ == "__main__":

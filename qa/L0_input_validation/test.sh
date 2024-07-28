@@ -55,7 +55,6 @@ TEST_EXEC=./input_byte_size_test
 export CUDA_VISIBLE_DEVICES=0
 
 rm -fr *.log
-cp -r /data/inferenceserver/${REPO_VERSION}/qa_identity_model_repository/{savedmodel_zero_1_float32,savedmodel_zero_1_object} ./models
 
 # input_validation_test
 SERVER_ARGS="--model-repository=`pwd`/models"
@@ -82,6 +81,9 @@ wait $SERVER_PID
 # input_shape_validation_test
 pip install torch
 pip install pytest-asyncio
+
+cp -r $DATADIR/qa_shapetensor_model_repository/plan_nobatch_zero_1_float32_int32 models/.
+cp -r $DATADIR/qa_shapetensor_model_repository/plan_zero_1_float32_int32 models/.
 
 SERVER_ARGS="--model-repository=`pwd`/models"
 run_server
@@ -115,6 +117,8 @@ kill $SERVER_PID
 wait $SERVER_PID
 
 # input_byte_size_test
+cp -r /data/inferenceserver/${REPO_VERSION}/qa_identity_model_repository/{savedmodel_zero_1_float32,savedmodel_zero_1_object} ./models
+
 set +e
 LD_LIBRARY_PATH=/opt/tritonserver/lib:$LD_LIBRARY_PATH $TEST_EXEC >>$TEST_LOG 2>&1
 if [ $? -ne 0 ]; then
