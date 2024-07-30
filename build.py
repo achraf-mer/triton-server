@@ -1655,7 +1655,7 @@ def core_build(
         )
         cmake_script.mkdir(os.path.join(install_dir, "lib"))
         cmake_script.cp(
-            os.path.join(repo_install_dir, "lib", "libtritonserver.so"),
+            os.path.join(repo_install_dir, "lib64", "libtritonserver.so"),
             os.path.join(install_dir, "lib"),
         )
     # [FIXME] Placing the Triton server wheel file in 'python' for now, should
