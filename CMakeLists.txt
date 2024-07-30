@@ -114,12 +114,12 @@ include(FetchContent)
 
 FetchContent_Declare(
   repo-core
-  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/core.git
+  GIT_REPOSITORY https://github.com/achraf-mer/core.git
   GIT_TAG ${TRITON_CORE_REPO_TAG}
 )
 FetchContent_Declare(
   repo-third-party
-  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/third_party.git
+  GIT_REPOSITORY https://github.com/achraf-mer/third_party.git
   GIT_TAG ${TRITON_THIRD_PARTY_REPO_TAG}
 )
 
